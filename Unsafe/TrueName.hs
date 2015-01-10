@@ -11,9 +11,6 @@ import Language.Haskell.TH.Syntax
     hiding (trueName)
 #endif
 
-concatMapM :: (Functor m, Monad m) => (a -> m [b]) -> [a] -> m [b]
-concatMapM f xs = concat <$> mapM f xs
-
 conNames :: Con -> [Name]
 conNames con = case con of
     NormalC name _ -> [name]
@@ -21,75 +18,75 @@ conNames con = case con of
     InfixC _ name _ -> [name]
     ForallC _ _ con' -> conNames con'
 
-decNames :: Dec -> Q [Name]
+decNames :: Dec -> [Name]
 decNames dec = case dec of
-    FunD _ _ -> return []
-    ValD _ _ _ -> return []
-    DataD _ _ _ cons _ -> return (conNames =<< cons)
-    NewtypeD _ _ _ con _ -> return (conNames con)
+    FunD _ _ -> []
+    ValD _ _ _ -> []
+    DataD _ _ _ cons _ -> conNames =<< cons
+    NewtypeD _ _ _ con _ -> conNames con
     TySynD _ _ typ -> typNames typ
-    ClassD _ _ _ _ decs -> concatMapM decNames decs
-    InstanceD cxt typ decs -> (++) <$> concatMapM predNames cxt
-        <*> ((++) <$> typNames typ <*> concatMapM decNames decs)
-    SigD name typ -> (:) name <$> typNames typ
+    ClassD _ _ _ _ decs -> decNames =<< decs
+    InstanceD cxt typ decs -> (predNames =<< cxt)
+        ++ typNames typ ++ (decNames =<< decs)
+    SigD name typ -> name : typNames typ
     ForeignD frgn -> case frgn of
-        ImportF _ _ _ name t -> (:) name <$> typNames t
-        ExportF _ _ name t -> (:) name <$> typNames t
+        ImportF _ _ _ name t -> name : typNames t
+        ExportF _ _ name t -> name : typNames t
 #if MIN_VERSION_template_haskell(2,8,0)
-    InfixD _ _ -> return []
+    InfixD _ _ -> []
 #endif
-    PragmaD _ -> return []
-    FamilyD _ _ _ _ -> return []
-    DataInstD cxt _ _ cons names -> (++) (conNames =<< cons)
-        . (++) names <$> concatMapM predNames cxt
-    NewtypeInstD cxt _ _ con names -> (++) (conNames con)
-        . (++) names <$> concatMapM predNames cxt
+    PragmaD _ -> []
+    FamilyD _ _ _ _ -> []
+    DataInstD cxt _ _ cons names -> (conNames =<< cons)
+        ++ names ++ (predNames =<< cxt)
+    NewtypeInstD cxt _ _ con names -> conNames con
+        ++ names ++ (predNames =<< cxt)
 #if MIN_VERSION_template_haskell(2,9,0)
     TySynInstD _ tse -> tseNames tse
-    ClosedTypeFamilyD _ _ _ tses -> concatMapM tseNames tses
-    RoleAnnotD _ _ -> return []
+    ClosedTypeFamilyD _ _ _ tses -> tseNames =<< tses
+    RoleAnnotD _ _ -> []
 
-tseNames :: TySynEqn -> Q [Name]
-tseNames (TySynEqn ts t) = (++) <$> concatMapM typNames ts <*> typNames t
+tseNames :: TySynEqn -> [Name]
+tseNames (TySynEqn ts t) = (typNames =<< ts) ++ typNames t
 #else
-    TySynInstD _ ts t -> (++) <$> concatMapM typNames ts <*> typNames t
+    TySynInstD _ ts t -> (typNames =<< ts) ++ typNames t
 #endif
 
-predNames :: Pred -> Q [Name]
+predNames :: Pred -> [Name]
 predNames p = case p of
-    ClassP n ts -> (:) n <$> concatMapM typNames ts
-    EqualP s t -> (++) <$> typNames s <*> typNames t
+    ClassP n ts -> n : (typNames =<< ts)
+    EqualP s t -> typNames s ++ typNames t
 
-typNames :: Type -> Q [Name]
+typNames :: Type -> [Name]
 typNames typ = case typ of
-    ForallT _ c t -> (++) <$> concatMapM predNames c <*> typNames t
-    AppT s t -> (++) <$> typNames s <*> typNames t
+    ForallT _ c t -> (predNames =<< c) ++ typNames t
+    AppT s t -> typNames s ++ typNames t
     SigT t _ -> typNames t
-    VarT _ -> return []
-    ConT name -> return [name]
-    TupleT _ -> return []
-    UnboxedTupleT _ -> return []
-    ArrowT -> return []
-    ListT -> return []
+    VarT _ -> []
+    ConT name -> [name]
+    TupleT _ -> []
+    UnboxedTupleT _ -> []
+    ArrowT -> []
+    ListT -> []
 #if MIN_VERSION_template_haskell(2,8,0)
-    PromotedT _ -> return []
-    PromotedTupleT _ -> return []
-    PromotedNilT -> return []
-    PromotedConsT -> return []
-    StarT -> return []
-    ConstraintT -> return []
-    LitT _ -> return []
+    PromotedT _ -> []
+    PromotedTupleT _ -> []
+    PromotedNilT -> []
+    PromotedConsT -> []
+    StarT -> []
+    ConstraintT -> []
+    LitT _ -> []
 #endif
 
-infoNames :: Info -> Q [Name]
+infoNames :: Info -> [Name]
 infoNames info = case info of
     ClassI dec _ -> decNames dec
     ClassOpI _ typ _ _ -> typNames typ
     TyConI dec -> decNames dec
-    FamilyI _ decs -> concatMapM decNames decs
-    DataConI _ typ parent _ -> (:) parent <$> typNames typ
+    FamilyI _ decs -> decNames =<< decs
+    DataConI _ typ parent _ -> parent : typNames typ
     VarI _ typ _ _ -> typNames typ
-    PrimTyConI _ _ _ -> return []
+    PrimTyConI _ _ _ -> []
     TyVarI _ typ -> typNames typ
 
 -- | Scrapes a qualified 'Name' out from a point-of-entry that you do have
@@ -101,7 +98,7 @@ infoNames info = case info of
 -- <https://github.com/liyang/true-name/blob/master/sanity.hs included examples>.
 trueName :: String -> Name -> Q Name
 trueName base thing = do
-    cons <- infoNames =<< reify thing
+    cons <- infoNames <$> reify thing
     case filter ((==) base . nameBase) cons of
         [name] -> return name
         _ -> fail $ "trueName: you wanted " ++ show base
