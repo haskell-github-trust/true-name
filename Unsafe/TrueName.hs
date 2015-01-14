@@ -14,7 +14,8 @@ import Language.Haskell.TH.Syntax
 conNames :: Con -> [Name]
 conNames con = case con of
     NormalC name _ -> [name]
-    RecC name fields -> name : map (\ (fname, _, _) -> fname) fields
+    RecC name fields -> name : concat
+        [ fname : typNames typ | (fname, _, typ) <- fields ]
     InfixC _ name _ -> [name]
     ForallC _ _ con' -> conNames con'
 
