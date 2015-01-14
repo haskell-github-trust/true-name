@@ -17,7 +17,7 @@ import Unsafe.TrueName
 
 main :: IO ()
 main = do
-    print $(ConE <$> trueName "Nil" ''IntSet)
+    print $(ConE <$> trueName "Data.IntSet.Base.Nil" ''IntSet)
 #if MIN_VERSION_containers(0,5,0)
     print $ $(ConE <$> trueName "Tip" ''IntSet) 0 31
 #else

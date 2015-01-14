@@ -5,6 +5,7 @@
 module Unsafe.TrueName (trueName, quasiName) where
 
 import Control.Applicative
+import Data.List (nub)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 #if MIN_VERSION_template_haskell(2,8,0)
@@ -98,12 +99,12 @@ infoNames info = case info of
 -- Check the
 -- <https://github.com/liyang/true-name/blob/master/sanity.hs included examples>.
 trueName :: String -> Name -> Q Name
-trueName base thing = do
-    cons <- infoNames <$> reify thing
-    case filter ((==) base . nameBase) cons of
-        [name] -> return name
-        _ -> fail $ "trueName: you wanted " ++ show base
-            ++ ", but I only have " ++ show (map nameBase cons)
+trueName name thing = do
+    cons <- nub . infoNames <$> reify thing
+    case filter (\ n -> name == nameBase n || name == show n) cons of
+        [n] -> return n
+        _ -> fail $ "trueName: you wanted " ++ show name ++
+            ", but I have:\n" ++ unlines ((++) "\t" . show <$> cons)
 
 -- | 'QuasiQuoter' interface to 'trueName'. Accepts two or more
 -- corresponding argument tokens: first should be sans @""@-quotes; the
@@ -115,21 +116,21 @@ trueName base thing = do
 -- not quite as flexible as 'trueName'.
 quasiName :: QuasiQuoter
 quasiName = QuasiQuoter
-    { quoteExp = fmap (ConE . snd) . name
-    , quotePat = fmap (uncurry $ flip ConP) . name
-    , quoteType = fmap (ConT . snd) . name
+    { quoteExp = fmap (ConE . fst) . nameVars
+    , quotePat = fmap (uncurry ConP) . nameVars
+    , quoteType = fmap (ConT . fst) . nameVars
     , quoteDec = \ _ -> fail "quasiName: I'm not sure how this works."
     } where
-    name spec = do
-        (base, extra, (things, m'thing)) <- case words spec of
-            base : s0 : extra -> (,,) base extra <$> case s0 of
+    nameVars spec = do
+        (name, extra, (things, m'thing)) <- case words spec of
+            name : s0 : extra -> (,,) name extra <$> case s0 of
                 '\'' : s1 -> case s1 of
                     '\'' : s2 -> (,) s2 <$> lookupTypeName s2
                     _ -> (,) s1 <$> lookupValueName s1
                 _ -> return (s0, Just $ mkName s0) -- unhygenic, says TH docs
             _ -> fail $ "quasiName: can't parse spec: " ++ spec
         let nope = fail $ "quasiName: not in scope: " ++ things
-        (,) (pat <$> extra) <$> maybe nope (trueName base) m'thing
+        flip (,) (pat <$> extra) <$> maybe nope (trueName name) m'thing
     pat n = case n of
         "_" -> WildP
         _ -> VarP (mkName n)
