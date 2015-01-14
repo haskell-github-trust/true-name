@@ -1,5 +1,5 @@
 name:           true-name
-version:        0.0.0.0
+version:        0.0.0.1
 synopsis:       Template Haskell hack to violate another module's abstractions
 description:
     <http://tvtropes.org/pmwiki/pmwiki.php/Main/IKnowYourTrueName Knowing a true name gives one power over its owner>.
@@ -14,7 +14,7 @@ license:        BSD3
 license-file:   LICENSE
 author:         Liyang HU
 maintainer:     true-name@liyang.hu
-copyright:      © 2014 Liyang HU
+copyright:      © 2014−2015 Liyang HU
 category:       Data, Unsafe
 build-type:     Simple
 cabal-version:  >= 1.10
