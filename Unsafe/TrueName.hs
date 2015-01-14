@@ -92,9 +92,15 @@ infoNames info = case info of
     TyVarI _ typ -> typNames typ
 
 -- | Scrapes a qualified 'Name' out from a point-of-entry that you do have
--- access to. First argument is the 'nameBase' part of the required 'Name',
--- while the second is some other 'Name' that contains the required 'Name'
--- in its type or declaration.
+-- access to. The first 'String' argument is either the 'nameBase'―or
+-- fully-qualified―part of the required 'Name', while the second is some
+-- other 'Name' that contains the required 'Name' in its type or
+-- declaration.
+--
+-- Note that since GHC
+-- <http://hackage.haskell.org/package/template-haskell/docs/Language-Haskell-TH.html#v:VarI does not currently return the RHS of function definitons>,
+-- 'trueName' cannot obtain the 'Name' for an unexported function. The only
+-- workaround seems to involve copypasta. D:
 --
 -- Check the
 -- <https://github.com/liyang/true-name/blob/master/sanity.hs included examples>.
