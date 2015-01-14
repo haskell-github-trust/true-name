@@ -133,5 +133,7 @@ quasiName = QuasiQuoter
         flip (,) (pat <$> extra) <$> maybe nope (trueName name) m'thing
     pat n = case n of
         "_" -> WildP
+        '!' : ns -> BangP (pat ns)
+        '~' : ns -> TildeP (pat ns)
         _ -> VarP (mkName n)
 
