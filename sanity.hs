@@ -3,7 +3,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 import Prelude
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative
+#endif
 import Data.Fixed
 import Data.IntSet (IntSet)
 import Data.Time

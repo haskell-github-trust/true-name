@@ -4,7 +4,10 @@
 
 module Unsafe.TrueName (trueName, quasiName) where
 
+import Prelude
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative
+#endif
 import Data.List (nub)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
@@ -43,21 +46,31 @@ decNames dec = case dec of
         ++ names ++ (predNames =<< cxt)
     NewtypeInstD cxt _ _ con names -> conNames con
         ++ names ++ (predNames =<< cxt)
-#if MIN_VERSION_template_haskell(2,9,0)
+#if !MIN_VERSION_template_haskell(2,9,0)
+    TySynInstD _ ts t -> (typNames =<< ts) ++ typNames t
+#else
     TySynInstD _ tse -> tseNames tse
     ClosedTypeFamilyD _ _ _ tses -> tseNames =<< tses
     RoleAnnotD _ _ -> []
+#endif
+#if MIN_VERSION_template_haskell(2,10,0)
+    StandaloneDerivD cxt typ -> (predNames =<< cxt) ++ typNames typ
+    DefaultSigD _ _ -> []
+#endif
 
+#if MIN_VERSION_template_haskell(2,9,0)
 tseNames :: TySynEqn -> [Name]
 tseNames (TySynEqn ts t) = (typNames =<< ts) ++ typNames t
-#else
-    TySynInstD _ ts t -> (typNames =<< ts) ++ typNames t
 #endif
 
 predNames :: Pred -> [Name]
+#if !MIN_VERSION_template_haskell(2,10,0)
 predNames p = case p of
     ClassP n ts -> n : (typNames =<< ts)
     EqualP s t -> typNames s ++ typNames t
+#else
+predNames = typNames
+#endif
 
 typNames :: Type -> [Name]
 typNames typ = case typ of
@@ -78,6 +91,9 @@ typNames typ = case typ of
     StarT -> []
     ConstraintT -> []
     LitT _ -> []
+#endif
+#if MIN_VERSION_template_haskell(2,10,0)
+    EqualityT -> []
 #endif
 
 infoNames :: Info -> [Name]
