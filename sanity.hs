@@ -2,13 +2,13 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-import Prelude
 import Control.Applicative
 import Data.Fixed
 import Data.IntSet (IntSet)
 import Data.Time
 import Data.Time.Clock.POSIX
 import Language.Haskell.TH
+import Prelude
 
 import Unsafe.TrueName
 
