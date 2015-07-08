@@ -11,6 +11,7 @@ import Language.Haskell.TH.Syntax
 #if MIN_VERSION_template_haskell(2,8,0)
     hiding (trueName)
 #endif
+import Prelude
 
 conNames :: Con -> [Name]
 conNames con = case con of
@@ -47,17 +48,27 @@ decNames dec = case dec of
     TySynInstD _ tse -> tseNames tse
     ClosedTypeFamilyD _ _ _ tses -> tseNames =<< tses
     RoleAnnotD _ _ -> []
-
-tseNames :: TySynEqn -> [Name]
-tseNames (TySynEqn ts t) = (typNames =<< ts) ++ typNames t
 #else
     TySynInstD _ ts t -> (typNames =<< ts) ++ typNames t
 #endif
+#if MIN_VERSION_template_haskell(2,10,0)
+    StandaloneDerivD cxt typ -> (predNames =<< cxt) ++ typNames typ
+    DefaultSigD _ _ -> []
+#endif
+
+#if MIN_VERSION_template_haskell(2,9,0)
+tseNames :: TySynEqn -> [Name]
+tseNames (TySynEqn ts t) = (typNames =<< ts) ++ typNames t
+#endif
 
 predNames :: Pred -> [Name]
+#if MIN_VERSION_template_haskell(2,10,0)
+predNames = typNames
+#else
 predNames p = case p of
     ClassP n ts -> n : (typNames =<< ts)
     EqualP s t -> typNames s ++ typNames t
+#endif
 
 typNames :: Type -> [Name]
 typNames typ = case typ of
@@ -78,6 +89,9 @@ typNames typ = case typ of
     StarT -> []
     ConstraintT -> []
     LitT _ -> []
+#endif
+#if MIN_VERSION_template_haskell(2,10,0)
+    EqualityT -> []
 #endif
 
 infoNames :: Info -> [Name]
