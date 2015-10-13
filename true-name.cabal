@@ -1,5 +1,5 @@
 name:           true-name
-version:        0.0.0.1
+version:        0.0.0.2
 synopsis:       Template Haskell hack to violate another module's abstractions
 description:
     <http://tvtropes.org/pmwiki/pmwiki.php/Main/IKnowYourTrueName Knowing a true name gives one power over its owner>.
