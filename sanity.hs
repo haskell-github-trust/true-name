@@ -20,6 +20,7 @@ import Unsafe.TrueName
 main :: IO ()
 main = do
     print $(ConE <$> summon "Data.IntSet.Base.Nil" ''IntSet)
+    print [truename| ''IntSet Data.IntSet.Base.Nil |] -- same
 #if MIN_VERSION_containers(0,5,0)
     print $ $(ConE <$> summon "Tip" ''IntSet) 0 31
 #else
@@ -28,17 +29,17 @@ main = do
 
     -- same difference
     print ($(ConE <$> summon "MkDiffTime" ''DiffTime) (7890.123456 :: Pico))
-    print $ [quasiName| MkDiffTime ''DiffTime |] (7890.123456 :: Pico)
+    print $ [truename| ''DiffTime MkDiffTime |] (7890.123456 :: Pico)
 
     -- patterns
     print . picoseconds =<< getPOSIXTime
 
 picoseconds :: NominalDiffTime -> Integer
 picoseconds dt = case dt of
-    [quasiName| MkNominalDiffTime ''NominalDiffTime ps |] -> case ps of
+    [truename| ''NominalDiffTime MkNominalDiffTime | ps |] -> case ps of
 #if MIN_VERSION_base(4,7,0)
         MkFixed n -> n
 #else
-        [quasiName| MkFixed ''Fixed n |] -> n
+        [truename| ''Fixed MkFixed | n |] -> n
 #endif
 

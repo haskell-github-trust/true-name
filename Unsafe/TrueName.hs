@@ -2,12 +2,13 @@
 
 -- | Refer to <https://github.com/liyang/true-name/blob/master/sanity.hs these examples>.
 
-module Unsafe.TrueName (summon, quasiName) where
+module Unsafe.TrueName (summon, truename) where
 
 import Prelude
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative
 #endif
+import Control.Monad
 import Data.List (nub)
 import Language.Haskell.TH.Ppr
 import Language.Haskell.TH.PprLib
@@ -163,34 +164,85 @@ summon name thing = do
         NameG TcClsName _ _ -> " (type)"
         _ -> " (?)"
 
--- | 'QuasiQuoter' interface to 'summon'. Accepts two or more
--- corresponding argument tokens: first should be sans @""@-quotes; the
--- namespace for the second is denoted in the usual TH syntax of either
--- a single @'@ or double @''@ prefix.
+-- | A more convenient 'QuasiQuoter' interface to 'summon'.
 --
--- Extra tokens are assigned as variable names in a 'Pat' context. 'Exp' and
--- 'Type' are always created with 'ConE' and 'ConT' respectively, so this is
--- not quite as flexible as 'summon'.
-quasiName :: QuasiQuoter
-quasiName = QuasiQuoter
-    { quoteExp = fmap (ConE . fst) . nameVars
-    , quotePat = fmap (uncurry ConP) . nameVars
-    , quoteType = fmap (ConT . fst) . nameVars
-    , quoteDec = \ _ -> fail "quasiName: I'm not sure how this works."
+-- The first space-delimited token gives the initial 'Name' passed to
+-- 'summon': it must be ‘quoted’ with a @'@ or @''@ prefix to indicate
+-- whether it should be interpreted in an expression or a type context,
+-- as per <https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/template-haskell.html#th-syntax the usual TH syntax>.
+-- Subsequent tokens correspond to the 'String' argument of 'summon', and
+-- are iterated over. Thus
+--
+-- > [truename| ''A B C D |]
+--
+-- is roughly equivalent to:
+--
+-- > summon "D" =<< summon "C" =<< summon "B" ''A
+--
+-- but with the resulting 'Name' wrapped up in 'ConE', 'VarE', 'ConP', or
+-- 'ConT', depending on the context. (There is no 'quoteDec'.)
+--
+-- Variable bindings are given after a @|@ token in a 'Pat' context:
+--
+-- > [truename| ''Chan Chan | chanR chanW |] <- newChan
+--
+-- These may be prefixed with @!@ or @~@ to give the usual semantics.
+-- Nested or more exotic patterns are not supported.
+--
+-- With this, the example from 'summon' may be more succinctly written:
+--
+-- >{-# LANGUAGE QuasiQuotes #-}
+-- >module Main where
+-- >import Unsafe.TrueName
+-- >import M
+-- >
+-- >type T = [truename| 's T |]
+-- >mkC :: Int -> T; unC :: T -> Int; f :: T -> Int
+-- >mkC = [truename| 's T C |]
+-- >unC [truename| 's T C | n |] = n
+-- >f = [truename| 's T f |]
+-- >
+-- >main :: IO ()
+-- >main = print (unC t, n) where
+-- >    t = s (mkC 42 :: T)
+-- >    n = f (s t)
+truename :: QuasiQuoter
+truename = QuasiQuoter
+    { quoteExp = makeE <=< nameVars
+    , quotePat = makeP <=< nameVars
+    , quoteType = makeT <=< nameVars
+    , quoteDec = \ _ -> err "I'm not sure how this would work"
     } where
-    nameVars spec = do
-        (name, extra, (things, m'thing)) <- case words spec of
-            name : s0 : extra -> (,,) name extra <$> case s0 of
-                '\'' : s1 -> case s1 of
-                    '\'' : s2 -> (,) s2 <$> lookupTypeName s2
-                    _ -> (,) s1 <$> lookupValueName s1
-                _ -> return (s0, Just $ mkName s0) -- unhygenic, says TH docs
-            _ -> fail $ "quasiName: can't parse spec: " ++ spec
-        let nope = fail $ "quasiName: not in scope: " ++ things
-        flip (,) (pat <$> extra) <$> maybe nope (summon name) m'thing
-    pat n = case n of
-        "_" -> WildP
-        '!' : ns -> BangP (pat ns)
-        '~' : ns -> TildeP (pat ns)
-        _ -> VarP (mkName n)
+    err = fail . (++) "truename: "
+    noPat = err . (++) "unexpected pattern variables: " . unwords
+
+    makeT (name, vars) = ConT name <$ unless (null vars) (noPat vars)
+    makeE (name@(Name occ flavour), vars) = case flavour of
+        NameG VarName _ _ -> VarE name <$ unless (null vars) (noPat vars)
+        NameG DataName _ _ -> ConE name <$ unless (null vars) (noPat vars)
+        _ -> err $ occString occ ++ " has a strange flavour"
+    makeP (name, vars) = return $ ConP name (map pat vars) where
+        pat n = case n of
+            "_" -> WildP
+            '!' : ns -> BangP (pat ns)
+            '~' : ns -> TildeP (pat ns)
+            _ -> VarP (mkName n)
+
+    lookupThing :: String -> Q Name
+    lookupThing s0 = case s0 of
+        '\'' : s1 -> case s1 of
+            '\'' : s2 -> hmm s2 "lookupTypeName" =<< lookupTypeName s2
+            _ -> hmm s1 "lookupValueName" =<< lookupValueName s1
+        _ -> err $ "please specify either '" ++ s0 ++ " or ''" ++ s0
+      where
+        hmm s l = maybe (err $ unwords [l, show s, "failed"]) return
+
+    nameVars :: String -> Q (Name, [String])
+    nameVars spec = case words spec of
+        [] -> err "expecting at least one token"
+        start : rest -> do
+            thing <- lookupThing start
+            let (names, vars) = break ("|" ==) rest
+            name <- foldM (flip summon) thing names
+            return (name, dropWhile ("|" ==) vars)
 
