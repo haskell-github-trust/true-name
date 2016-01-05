@@ -6,6 +6,8 @@ import Prelude
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative
 #endif
+import Control.Concurrent.Chan
+import Control.Concurrent.MVar
 import Data.Fixed
 import Data.IntSet (IntSet)
 import Data.Time
@@ -33,6 +35,20 @@ main = do
 
     -- patterns
     print . picoseconds =<< getPOSIXTime
+
+    -- go deeper; refer to "Control.Concurrent.Chan"
+    chan@[truename| ''Chan Chan | chanR chanW |]
+        <- newChan :: IO ([truename| 'newChan Chan |] Int)
+        -- get at 'Chan' via the type of 'newChan'
+    writeChan chan (42 :: Int)
+
+    streamR <- readMVar chanR :: IO ([truename| ''Chan Chan Stream |] Int)
+    [truename| ''Chan Chan Stream ChItem ChItem | x next |] <- readMVar streamR
+        :: IO ([truename| ''Chan Chan Stream ChItem |] Int)
+    putStrLn $ "chan contains: " ++ show x
+
+    streamW <- readMVar chanW :: IO ([truename| ''Chan Chan Stream |] Int)
+    putStrLn $ "next == streamW? " ++ show (next == streamW)
 
 picoseconds :: NominalDiffTime -> Integer
 picoseconds dt = case dt of
