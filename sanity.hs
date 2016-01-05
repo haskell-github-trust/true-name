@@ -19,15 +19,15 @@ import Unsafe.TrueName
 
 main :: IO ()
 main = do
-    print $(ConE <$> trueName "Data.IntSet.Base.Nil" ''IntSet)
+    print $(ConE <$> summon "Data.IntSet.Base.Nil" ''IntSet)
 #if MIN_VERSION_containers(0,5,0)
-    print $ $(ConE <$> trueName "Tip" ''IntSet) 0 31
+    print $ $(ConE <$> summon "Tip" ''IntSet) 0 31
 #else
-    print $ $(ConE <$> trueName "Tip" ''IntSet) 31
+    print $ $(ConE <$> summon "Tip" ''IntSet) 31
 #endif
 
     -- same difference
-    print ($(ConE <$> trueName "MkDiffTime" ''DiffTime) (7890.123456 :: Pico))
+    print ($(ConE <$> summon "MkDiffTime" ''DiffTime) (7890.123456 :: Pico))
     print $ [quasiName| MkDiffTime ''DiffTime |] (7890.123456 :: Pico)
 
     -- patterns

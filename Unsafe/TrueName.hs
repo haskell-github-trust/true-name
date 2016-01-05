@@ -1,19 +1,18 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
 
-module Unsafe.TrueName (trueName, quasiName) where
+-- | Refer to <https://github.com/liyang/true-name/blob/master/sanity.hs these examples>.
+
+module Unsafe.TrueName (summon, quasiName) where
 
 import Prelude
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative
 #endif
 import Data.List (nub)
+import Language.Haskell.TH.Ppr
+import Language.Haskell.TH.PprLib
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
-#if MIN_VERSION_template_haskell(2,8,0)
-    hiding (trueName)
-#endif
 
 conNames :: Con -> [Name]
 conNames con = case con of
@@ -107,35 +106,71 @@ infoNames info = case info of
     PrimTyConI _ _ _ -> []
     TyVarI _ typ -> typNames typ
 
--- | Scrapes a qualified 'Name' out from a point-of-entry that you do have
--- access to. The first 'String' argument is either the 'nameBase'―or
--- fully-qualified―part of the required 'Name', while the second is some
--- other 'Name' that contains the required 'Name' in its type or
--- declaration.
+-- | Summons a 'Name' using @template-haskell@'s 'reify' function.
 --
--- Note that since GHC
--- <http://hackage.haskell.org/package/template-haskell/docs/Language-Haskell-TH.html#v:VarI does not currently return the RHS of function definitons>,
--- 'trueName' cannot obtain the 'Name' for an unexported function. The only
--- workaround seems to involve copypasta. D:
+-- The first argument is a 'String' matching the 'Name' we want: either its
+-- 'nameBase', or qualified with its module. The second argument gives the
+-- 'Name' to 'reify'.
 --
--- Check the
--- <https://github.com/liyang/true-name/blob/master/sanity.hs included examples>.
-trueName :: String -> Name -> Q Name
-trueName name thing = do
-    cons <- nub . infoNames <$> reify thing
-    case filter (\ n -> name == nameBase n || name == show n) cons of
+-- If no match is found or there is some ambiguity, 'summon' will fail with
+-- a list of 'Name's found, along with the output of 'reify' for reference.
+--
+-- Suppose we are given a module @M@ that exports a function @s@, but not
+-- the type @T@, the constrcutor @C@, nor the field @f@:
+--
+-- > module M (s) where
+-- > newtype T = C { f :: Int }
+-- > s :: T -> T
+-- > s = C . succ . f
+--
+-- In our own module we have no legitimate way of passing @s@ an argument of
+-- type @T@. We can get around this in a type-safe way with 'summon':
+--
+-- >{-# LANGUAGE TemplateHaskell #-}
+-- >module Main where
+-- >import Language.Haskell.TH.Syntax
+-- >import Unsafe.TrueName
+-- >import M
+-- >
+-- >type T = $(fmap ConT $ summon "T" 's)
+-- >mkC :: Int -> T; unC :: T -> Int; f :: T -> Int
+-- >mkC = $(fmap ConE $ summon "C" =<< summon "T" 's)
+-- >unC $(fmap (`ConP` [VarP $ mkName "n"]) $ summon "C" =<< summon "T" 's) = n
+-- >f = $(fmap VarE $ summon "f" =<< summon "T" 's)
+-- >
+-- >main :: IO ()
+-- >main = print (unC t, n) where
+-- >    t = s (mkC 42 :: T)
+-- >    n = f (s t)
+--
+-- Note that 'summon' cannot obtain the 'Name' for an unexported function,
+-- since GHC <http://hackage.haskell.org/package/template-haskell/docs/Language-Haskell-TH.html#v:VarI does not currently return the RHS of function definitons>.
+-- The only workaround is to copypasta the definition. D:
+summon :: String -> Name -> Q Name
+summon name thing = do
+    info <- reify thing
+    let ns = nub (infoNames info)
+    case filter (\ n -> name == nameBase n || name == show n) ns of
         [n] -> return n
-        _ -> fail $ "trueName: you wanted " ++ show name ++
-            ", but I have:\n" ++ unlines ((++) "\t" . show <$> cons)
+        _ -> fail $ "summon: you wanted " ++ show name ++ ", but I have:\n"
+            ++ unlines ((++) "        " . namespace <$> ns)
+            ++ "    reify " ++ show thing ++ " returned:\n"
+            ++ show (nest 8 $ ppr info)
+  where
+    namespace n@(Name _ flavour) = show n ++ case flavour of
+        NameG VarName _ _ -> " (var)"
+        NameG DataName _ _ -> " (cons)"
+        NameG TcClsName _ _ -> " (type)"
+        _ -> " (?)"
 
--- | 'QuasiQuoter' interface to 'trueName'. Accepts two or more
+-- | 'QuasiQuoter' interface to 'summon'. Accepts two or more
 -- corresponding argument tokens: first should be sans @""@-quotes; the
 -- namespace for the second is denoted in the usual TH syntax of either
 -- a single @'@ or double @''@ prefix.
 --
 -- Extra tokens are assigned as variable names in a 'Pat' context. 'Exp' and
 -- 'Type' are always created with 'ConE' and 'ConT' respectively, so this is
--- not quite as flexible as 'trueName'.
+-- not quite as flexible as 'summon'.
 quasiName :: QuasiQuoter
 quasiName = QuasiQuoter
     { quoteExp = fmap (ConE . fst) . nameVars
@@ -152,7 +187,7 @@ quasiName = QuasiQuoter
                 _ -> return (s0, Just $ mkName s0) -- unhygenic, says TH docs
             _ -> fail $ "quasiName: can't parse spec: " ++ spec
         let nope = fail $ "quasiName: not in scope: " ++ things
-        flip (,) (pat <$> extra) <$> maybe nope (trueName name) m'thing
+        flip (,) (pat <$> extra) <$> maybe nope (summon name) m'thing
     pat n = case n of
         "_" -> WildP
         '!' : ns -> BangP (pat ns)
