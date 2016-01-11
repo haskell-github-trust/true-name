@@ -1,14 +1,16 @@
 name:           true-name
 version:        0.1.0.0
-synopsis:       Template Haskell hack to violate another module's abstractions
+synopsis:       Template Haskell hack to violate module abstractions
 description:
     <http://tvtropes.org/pmwiki/pmwiki.php/Main/IKnowYourTrueName Knowing a true name gives one power over its owner>.
     .
-    A Template Haskell hack to get unexported @Name@s―be they data
+    A Template Haskell hack to get unexported @Name@s―be they types, data
     constructors, record fields or class methods―a slightly less unsafe way
     to violate another module's abstractions than @unsafeCoerce@.
     .
     A few <https://github.com/liyang/true-name/blob/master/sanity.hs quick examples>.
+    .
+    I'm too lazy to keep a changelog, but I do write <https://github.com/liyang/true-name/commits/master detailed commit messages>.
 homepage:       https://github.com/liyang/true-name
 license:        BSD3
 license-file:   LICENSE
