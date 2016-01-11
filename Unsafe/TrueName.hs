@@ -187,6 +187,8 @@ summon name thing = do
 -- > [truename| ''Chan Chan | chanR chanW |] <- newChan
 --
 -- These may be prefixed with @!@ or @~@ to give the usual semantics.
+-- A single @..@ token invokes @RecordWildCards@ in 'Pat' contexts, and for
+-- record construction in 'Exp' contexts.
 -- Nested or more exotic patterns are not supported.
 --
 -- With this, the example from 'summon' may be more succinctly written:
@@ -219,14 +221,40 @@ truename = QuasiQuoter
     makeT (name, vars) = ConT name <$ unless (null vars) (noPat vars)
     makeE (name@(Name occ flavour), vars) = case flavour of
         NameG VarName _ _ -> VarE name <$ unless (null vars) (noPat vars)
-        NameG DataName _ _ -> ConE name <$ unless (null vars) (noPat vars)
+        NameG DataName _ _ -> case vars of
+            [] -> return (ConE name)
+            [".."] -> RecConE name . capture VarE <$> recFields name
+            _ -> noPat vars
         _ -> err $ occString occ ++ " has a strange flavour"
-    makeP (name, vars) = return $ ConP name (map pat vars) where
+    makeP (name, vars) = if vars == [".."]
+            then RecP name . capture VarP <$> recFields name
+            else return $ ConP name (map pat vars) where
         pat n = case n of
             "_" -> WildP
             '!' : ns -> BangP (pat ns)
             '~' : ns -> TildeP (pat ns)
             _ -> VarP (mkName n)
+    capture v = map $ \ f -> (f, v (mkName $ nameBase f))
+
+    recFields :: Name -> Q [Name]
+    recFields name = do
+        parent <- reify name >>= \ info -> case info of
+            DataConI _ _ p _ -> return p
+            _ -> err $ show name ++ " is not a data constructor"
+        dec <- reify parent >>= \ info -> case info of
+            TyConI d -> return d
+            _ -> err $ "parent " ++ show parent ++ " is not a plain type"
+        case dec of
+            DataD _ _ _ cs _ -> return $ concatMap fields cs
+            NewtypeD _ _ _ c _ -> return $ fields c
+            _ -> err $ "parent " ++ show parent ++ " neither data nor newtype"
+      where
+        fields :: Con -> [Name]
+        fields con = case con of
+            NormalC _ _ -> []
+            RecC n vsts -> if n /= name then [] else [ v | (v, _, _) <- vsts ]
+            InfixC _ _ _ -> []
+            ForallC _ _ c -> fields c
 
     lookupThing :: String -> Q Name
     lookupThing s0 = case s0 of
