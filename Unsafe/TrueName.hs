@@ -18,16 +18,20 @@ import Language.Haskell.TH.Syntax
 conNames :: Con -> [Name]
 conNames con = case con of
     NormalC name _ -> [name]
-    RecC name fields -> name : [ fname | (fname, _, _) <- fields ]
+    RecC name vbts -> name : [ fname | (fname, _, _) <- vbts ]
     InfixC _ name _ -> [name]
     ForallC _ _ con' -> conNames con'
+
+#if MIN_VERSION_template_haskell(2,11,0)
+    GadtC names _ typ -> names ++ typNames typ
+    RecGadtC names vbts typ -> names ++ typNames typ
+         ++ [ fname | (fname, _, _) <- vbts]
+#endif
 
 decNames :: Dec -> [Name]
 decNames dec = case dec of
     FunD _ _ -> []
     ValD _ _ _ -> []
-    DataD _ _ _ cons _ -> conNames =<< cons
-    NewtypeD _ _ _ con _ -> conNames con
     TySynD _ _ typ -> typNames typ
     ClassD _ _ _ _ decs -> decNames =<< decs
     InstanceD cxt typ decs -> (predNames =<< cxt)
@@ -36,22 +40,52 @@ decNames dec = case dec of
     ForeignD frgn -> case frgn of
         ImportF _ _ _ name t -> name : typNames t
         ExportF _ _ name t -> name : typNames t
+    PragmaD _ -> []
+
+#if MIN_VERSION_template_haskell(2,11,0)
+    DataD _ _ _ _ cons _ -> conNames =<< cons
+    NewtypeD _ _ _ _ con _ -> conNames con
+#else
+    DataD _ _ _ cons _ -> conNames =<< cons
+    NewtypeD _ _ _ con _ -> conNames con
+#endif
+
 #if MIN_VERSION_template_haskell(2,8,0)
     InfixD _ _ -> []
 #endif
-    PragmaD _ -> []
-    FamilyD _ _ _ _ -> []
+
+#if MIN_VERSION_template_haskell(2,11,0)
+    DataInstD cxt _ _ _ cons names -> (conNames =<< cons)
+        ++ (predNames =<< names) ++ (predNames =<< cxt)
+    NewtypeInstD cxt _ _ _ con names -> conNames con
+        ++ (predNames =<< names) ++ (predNames =<< cxt)
+#else
     DataInstD cxt _ _ cons names -> (conNames =<< cons)
         ++ names ++ (predNames =<< cxt)
     NewtypeInstD cxt _ _ con names -> conNames con
         ++ names ++ (predNames =<< cxt)
-#if !MIN_VERSION_template_haskell(2,9,0)
-    TySynInstD _ ts t -> (typNames =<< ts) ++ typNames t
-#else
-    TySynInstD _ tse -> tseNames tse
-    ClosedTypeFamilyD _ _ _ tses -> tseNames =<< tses
-    RoleAnnotD _ _ -> []
 #endif
+
+#if MIN_VERSION_template_haskell(2,11,0)
+    DataFamilyD _ _ _ -> []
+    OpenTypeFamilyD _ -> []
+#else
+    FamilyD _ _ _ _ -> []
+#endif
+
+#if MIN_VERSION_template_haskell(2,11,0)
+    ClosedTypeFamilyD _ tses -> tseNames =<< tses
+#elif MIN_VERSION_template_haskell(2,9,0)
+    ClosedTypeFamilyD _ _ _ tses -> tseNames =<< tses
+#endif
+
+#if MIN_VERSION_template_haskell(2,9,0)
+    TySynInstD _ tse -> tseNames tse
+    RoleAnnotD _ _ -> []
+#else
+    TySynInstD _ ts t -> (typNames =<< ts) ++ typNames t
+#endif
+
 #if MIN_VERSION_template_haskell(2,10,0)
     StandaloneDerivD cxt typ -> (predNames =<< cxt) ++ typNames typ
     DefaultSigD _ _ -> []
@@ -63,12 +97,12 @@ tseNames (TySynEqn ts t) = (typNames =<< ts) ++ typNames t
 #endif
 
 predNames :: Pred -> [Name]
-#if !MIN_VERSION_template_haskell(2,10,0)
+#if MIN_VERSION_template_haskell(2,10,0)
+predNames = typNames
+#else
 predNames p = case p of
     ClassP n ts -> n : (typNames =<< ts)
     EqualP s t -> typNames s ++ typNames t
-#else
-predNames = typNames
 #endif
 
 typNames :: Type -> [Name]
@@ -82,6 +116,7 @@ typNames typ = case typ of
     UnboxedTupleT _ -> []
     ArrowT -> []
     ListT -> []
+
 #if MIN_VERSION_template_haskell(2,8,0)
     PromotedT _ -> []
     PromotedTupleT _ -> []
@@ -91,20 +126,35 @@ typNames typ = case typ of
     ConstraintT -> []
     LitT _ -> []
 #endif
+
 #if MIN_VERSION_template_haskell(2,10,0)
     EqualityT -> []
+#endif
+
+#if MIN_VERSION_template_haskell(2,11,0)
+    InfixT s n t -> n : typNames s ++ typNames t
+    UInfixT s n t -> n : typNames s ++ typNames t
+    ParensT t -> typNames t
+    WildCardT -> []
 #endif
 
 infoNames :: Info -> [Name]
 infoNames info = case info of
     ClassI dec _ -> decNames dec
-    ClassOpI _ typ _ _ -> typNames typ
     TyConI dec -> decNames dec
     FamilyI _ decs -> decNames =<< decs
-    DataConI _ typ parent _ -> parent : typNames typ
-    VarI _ typ _ _ -> typNames typ
     PrimTyConI _ _ _ -> []
     TyVarI _ typ -> typNames typ
+
+#if MIN_VERSION_template_haskell(2,11,0)
+    ClassOpI _ typ _ -> typNames typ
+    DataConI _ typ parent -> parent : typNames typ
+    VarI _ typ _ -> typNames typ
+#else
+    ClassOpI _ typ _ _ -> typNames typ
+    DataConI _ typ parent _ -> parent : typNames typ
+    VarI _ typ _ _ -> typNames typ
+#endif
 
 -- | Summons a 'Name' using @template-haskell@'s 'reify' function.
 --
@@ -238,22 +288,36 @@ truename = QuasiQuoter
     recFields :: Name -> Q [Name]
     recFields name = do
         parent <- reify name >>= \ info -> case info of
+#if MIN_VERSION_template_haskell(2,11,0)
+            DataConI _ _ p -> return p
+#else
             DataConI _ _ p _ -> return p
+#endif
             _ -> err $ show name ++ " is not a data constructor"
         dec <- reify parent >>= \ info -> case info of
             TyConI d -> return d
             _ -> err $ "parent " ++ show parent ++ " is not a plain type"
         case dec of
-            DataD _ _ _ cs _ -> return $ concatMap fields cs
-            NewtypeD _ _ _ c _ -> return $ fields c
+#if MIN_VERSION_template_haskell(2,11,0)
+            DataD _ _ _ _ cs _ -> return (fields =<< cs)
+            NewtypeD _ _ _ _ c _ -> return (fields c)
+#else
+            DataD _ _ _ cs _ -> return (fields =<< cs)
+            NewtypeD _ _ _ c _ -> return (fields c)
+#endif
             _ -> err $ "parent " ++ show parent ++ " neither data nor newtype"
       where
         fields :: Con -> [Name]
         fields con = case con of
             NormalC _ _ -> []
-            RecC n vsts -> if n /= name then [] else [ v | (v, _, _) <- vsts ]
+            RecC n vbts -> if n /= name then [] else [ v | (v, _, _) <- vbts ]
             InfixC _ _ _ -> []
             ForallC _ _ c -> fields c
+#if MIN_VERSION_template_haskell(2,11,0)
+            GadtC _ _ _ -> []
+            RecGadtC ns vbts _ -> if name `notElem` ns then []
+                else [ v | (v, _, _) <- vbts ]
+#endif
 
     lookupThing :: String -> Q Name
     lookupThing s0 = case s0 of
