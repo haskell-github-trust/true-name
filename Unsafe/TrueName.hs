@@ -34,8 +34,12 @@ decNames dec = case dec of
     ValD _ _ _ -> []
     TySynD _ _ typ -> typNames typ
     ClassD _ _ _ _ decs -> decNames =<< decs
-    InstanceD cxt typ decs -> (predNames =<< cxt)
-        ++ typNames typ ++ (decNames =<< decs)
+#if MIN_VERSION_template_haskell(2,11,0)
+    InstanceD _ cxt typ decs ->
+#else
+    InstanceD cxt typ decs ->
+#endif
+        (predNames =<< cxt) ++ typNames typ ++ (decNames =<< decs)
     SigD name typ -> name : typNames typ
     ForeignD frgn -> case frgn of
         ImportF _ _ _ name t -> name : typNames t
