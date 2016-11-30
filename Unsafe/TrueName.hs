@@ -55,11 +55,21 @@ decNames dec = case dec of
     NewtypeD _ _ _ con _ -> conNames con
 #endif
 
+#if MIN_VERSION_template_haskell(2,12,0)
+    PatSynD _name _args _dir _pat -> []
+    PatSynSigD _name typ -> typNames typ
+#endif
+
 #if MIN_VERSION_template_haskell(2,8,0)
     InfixD _ _ -> []
 #endif
 
-#if MIN_VERSION_template_haskell(2,11,0)
+#if MIN_VERSION_template_haskell(2,12,0)
+    DataInstD cxt _name _typs _kind cons derivs   ->
+        datatypeNames cxt cons  ++ derivNames derivs
+    NewtypeInstD cxt _name _typs _kind con derivs ->
+        datatypeNames cxt [con] ++ derivNames derivs
+#elif MIN_VERSION_template_haskell(2,11,0)
     DataInstD cxt _ _ _ cons derivs ->
         datatypeNames cxt cons  ++ (predNames =<< derivs)
     NewtypeInstD cxt _ _ _ con derivs ->
@@ -89,14 +99,25 @@ decNames dec = case dec of
     TySynInstD _ ts t -> (typNames =<< ts) ++ typNames t
 #endif
 
-#if MIN_VERSION_template_haskell(2,10,0)
+#if MIN_VERSION_template_haskell(2,12,0)
+    StandaloneDerivD _strat cxt typ -> (predNames =<< cxt) ++ typNames typ
+#elif MIN_VERSION_template_haskell(2,10,0)
     StandaloneDerivD cxt typ -> (predNames =<< cxt) ++ typNames typ
+#endif
+
+#if MIN_VERSION_template_haskell(2,10,0)
     DefaultSigD _ _ -> []
 #endif
 {- }}} -}
 
 datatypeNames :: Cxt -> [Con] -> [Name]
 datatypeNames cxt cons = (conNames =<< cons) ++ (predNames =<< cxt)
+
+#if MIN_VERSION_template_haskell(2,12,0)
+derivNames :: [DerivClause] -> [Name]
+derivNames derivs = predNames =<<
+    [ p | DerivClause _strat cxt <- derivs, p <- cxt ]
+#endif
 
 #if MIN_VERSION_template_haskell(2,9,0)
 tseNames :: TySynEqn -> [Name]
@@ -145,6 +166,10 @@ typNames typ = case typ of
     ParensT t -> typNames t
     WildCardT -> []
 #endif
+
+#if MIN_VERSION_template_haskell(2,12,0)
+    UnboxedSumT _arity -> []
+#endif
 {- }}} -}
 
 infoNames :: Info -> [Name]{- {{{ -}
@@ -163,6 +188,10 @@ infoNames info = case info of
     ClassOpI _ typ _ _ -> typNames typ
     DataConI _ typ parent _ -> parent : typNames typ
     VarI _ typ _ _ -> typNames typ
+#endif
+
+#if MIN_VERSION_template_haskell(2,12,0)
+    PatSynI _name typ -> typNames typ
 #endif
 {- }}} -}
 
