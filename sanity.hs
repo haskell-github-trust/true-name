@@ -21,7 +21,11 @@ import Unsafe.TrueName
 
 main :: IO ()
 main = do
-#if MIN_VERSION_containers(0,5,0)
+#if MIN_VERSION_containers(0,5,9)
+    print $(ConE <$> summon "Data.IntSet.Internal.Nil" ''IntSet)
+    print [truename| ''IntSet Data.IntSet.Internal.Nil |] -- same
+    print $ $(ConE <$> summon "Tip" ''IntSet) 0 31
+#elif MIN_VERSION_containers(0,5,0)
     print $(ConE <$> summon "Data.IntSet.Base.Nil" ''IntSet)
     print [truename| ''IntSet Data.IntSet.Base.Nil |] -- same
     print $ $(ConE <$> summon "Tip" ''IntSet) 0 31
