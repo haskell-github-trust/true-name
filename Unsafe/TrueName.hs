@@ -59,15 +59,13 @@ decNames dec = case dec of
 #endif
 
 #if MIN_VERSION_template_haskell(2,11,0)
-    DataInstD cxt _ _ _ cons names -> (conNames =<< cons)
-        ++ (predNames =<< names) ++ (predNames =<< cxt)
-    NewtypeInstD cxt _ _ _ con names -> conNames con
-        ++ (predNames =<< names) ++ (predNames =<< cxt)
+    DataInstD cxt _ _ _ cons derivs ->
+        datatypeNames cxt cons  ++ (predNames =<< derivs)
+    NewtypeInstD cxt _ _ _ con derivs ->
+        datatypeNames cxt [con] ++ (predNames =<< derivs)
 #else
-    DataInstD cxt _ _ cons names -> (conNames =<< cons)
-        ++ names ++ (predNames =<< cxt)
-    NewtypeInstD cxt _ _ con names -> conNames con
-        ++ names ++ (predNames =<< cxt)
+    DataInstD cxt _ _ cons derivs   -> datatypeNames cxt cons  ++ derivs
+    NewtypeInstD cxt _ _ con derivs -> datatypeNames cxt [con] ++ derivs
 #endif
 
 #if MIN_VERSION_template_haskell(2,11,0)
@@ -94,6 +92,9 @@ decNames dec = case dec of
     StandaloneDerivD cxt typ -> (predNames =<< cxt) ++ typNames typ
     DefaultSigD _ _ -> []
 #endif
+
+datatypeNames :: Cxt -> [Con] -> [Name]
+datatypeNames cxt cons = (conNames =<< cons) ++ (predNames =<< cxt)
 
 #if MIN_VERSION_template_haskell(2,9,0)
 tseNames :: TySynEqn -> [Name]
