@@ -15,7 +15,7 @@ import Language.Haskell.TH.PprLib
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 
-conNames :: Con -> [Name]
+conNames :: Con -> [Name]{- {{{ -}
 conNames con = case con of
     NormalC name _ -> [name]
     RecC name vbts -> name : [ fname | (fname, _, _) <- vbts ]
@@ -27,8 +27,9 @@ conNames con = case con of
     RecGadtC names vbts typ -> names ++ typNames typ
          ++ [ fname | (fname, _, _) <- vbts]
 #endif
+{- }}} -}
 
-decNames :: Dec -> [Name]
+decNames :: Dec -> [Name]{- {{{ -}
 decNames dec = case dec of
     FunD _ _ -> []
     ValD _ _ _ -> []
@@ -92,6 +93,7 @@ decNames dec = case dec of
     StandaloneDerivD cxt typ -> (predNames =<< cxt) ++ typNames typ
     DefaultSigD _ _ -> []
 #endif
+{- }}} -}
 
 datatypeNames :: Cxt -> [Con] -> [Name]
 datatypeNames cxt cons = (conNames =<< cons) ++ (predNames =<< cxt)
@@ -101,7 +103,7 @@ tseNames :: TySynEqn -> [Name]
 tseNames (TySynEqn ts t) = (typNames =<< ts) ++ typNames t
 #endif
 
-predNames :: Pred -> [Name]
+predNames :: Pred -> [Name]{- {{{ -}
 #if MIN_VERSION_template_haskell(2,10,0)
 predNames = typNames
 #else
@@ -109,8 +111,9 @@ predNames p = case p of
     ClassP n ts -> n : (typNames =<< ts)
     EqualP s t -> typNames s ++ typNames t
 #endif
+{- }}} -}
 
-typNames :: Type -> [Name]
+typNames :: Type -> [Name]{- {{{ -}
 typNames typ = case typ of
     ForallT _ c t -> (predNames =<< c) ++ typNames t
     AppT s t -> typNames s ++ typNames t
@@ -142,8 +145,9 @@ typNames typ = case typ of
     ParensT t -> typNames t
     WildCardT -> []
 #endif
+{- }}} -}
 
-infoNames :: Info -> [Name]
+infoNames :: Info -> [Name]{- {{{ -}
 infoNames info = case info of
     ClassI dec _ -> decNames dec
     TyConI dec -> decNames dec
@@ -160,7 +164,9 @@ infoNames info = case info of
     DataConI _ typ parent _ -> parent : typNames typ
     VarI _ typ _ _ -> typNames typ
 #endif
+{- }}} -}
 
+{- {{{ -}
 -- | Summons a 'Name' using @template-haskell@'s 'reify' function.
 --
 -- The first argument is a 'String' matching the 'Name' we want: either its
@@ -201,7 +207,8 @@ infoNames info = case info of
 -- Note that 'summon' cannot obtain the 'Name' for an unexported function,
 -- since GHC <http://hackage.haskell.org/package/template-haskell/docs/Language-Haskell-TH.html#v:VarI does not currently return the RHS of function definitons>.
 -- The only workaround is to copypasta the definition. D:
-summon :: String -> Name -> Q Name
+{- }}} -}
+summon :: String -> Name -> Q Name{- {{{ -}
 summon name thing = do
     info <- reify thing
     let ns = nub (infoNames info)
@@ -217,7 +224,9 @@ summon name thing = do
         NameG DataName _ _ -> " (cons)"
         NameG TcClsName _ _ -> " (type)"
         _ -> " (?)"
+{- }}} -}
 
+{- {{{ -}
 -- | A more convenient 'QuasiQuoter' interface to 'summon'.
 --
 -- The first space-delimited token gives the initial 'Name' passed to
@@ -262,7 +271,8 @@ summon name thing = do
 -- >main = print (unC t, n) where
 -- >    t = s (mkC 42 :: T)
 -- >    n = f (s t)
-truename :: QuasiQuoter
+{- }}} -}
+truename :: QuasiQuoter{- {{{ -}
 truename = QuasiQuoter
     { quoteExp = makeE <=< nameVars
     , quotePat = makeP <=< nameVars
@@ -341,4 +351,4 @@ truename = QuasiQuoter
             let (names, vars) = break ("|" ==) rest
             name <- foldM (flip summon) thing names
             return (name, dropWhile ("|" ==) vars)
-
+{- }}} -}
