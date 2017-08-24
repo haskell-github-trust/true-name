@@ -43,6 +43,7 @@ library
 test-suite sanity
     default-language: Haskell2010
     type: exitcode-stdio-1.0
+    hs-source-dirs: test
     main-is: sanity.hs
     build-depends:
         base,
