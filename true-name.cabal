@@ -8,7 +8,7 @@ description:
     constructors, record fields or class methods―a slightly less unsafe way
     to violate another module's abstractions than @unsafeCoerce@.
     .
-    A few <https://github.com/liyang/true-name/blob/master/sanity.hs quick examples>.
+    A few <https://github.com/liyang/true-name/blob/master/test/sanity.hs quick examples>.
     .
     I'm too lazy to keep a changelog, but I do write <https://github.com/liyang/true-name/commits/master detailed commit messages>.
 homepage:       https://github.com/liyang/true-name

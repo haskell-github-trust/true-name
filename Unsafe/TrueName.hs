@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 
--- | Refer to <https://github.com/liyang/true-name/blob/master/sanity.hs these examples>.
+-- | Refer to <https://github.com/liyang/true-name/blob/master/test/sanity.hs these examples>.
 
 module Unsafe.TrueName (summon, truename) where
 
