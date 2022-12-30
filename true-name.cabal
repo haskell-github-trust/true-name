@@ -1,3 +1,5 @@
+cabal-version:  >= 1.10
+
 name:           true-name
 version:        0.1.0.4
 synopsis:       Template Haskell hack to violate module abstractions
@@ -19,7 +21,6 @@ maintainer:     true-name@liyang.hu
 copyright:      © 2014−2021 Liyang HU
 category:       Data, Unsafe
 build-type:     Simple
-cabal-version:  >= 1.10
 stability:      experimental
 tested-with:
     GHC == 7.4.2, GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3,
@@ -37,7 +38,7 @@ library
         Unsafe.TrueName
     build-depends:
         base >= 4.5 && < 5,
-        template-haskell >= 2.7
+        template-haskell >= 2.7 && < 2.20
     ghc-options: -Wall
 
 test-suite sanity

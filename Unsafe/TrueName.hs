@@ -196,6 +196,15 @@ typNames typ = case typ of
 #if MIN_VERSION_template_haskell(2,16,0)
     ForallVisT _ t -> typNames t
 #endif
+
+#if MIN_VERSION_template_haskell(2,17,0)
+    MulArrowT -> []
+#endif
+
+#if MIN_VERSION_template_haskell(2,19,0)
+    PromotedInfixT s n t -> n : typNames s ++ typNames t
+    PromotedUInfixT s n t -> n : typNames s ++ typNames t
+#endif
 {- }}} -}
 
 infoNames :: Info -> [Name]{- {{{ -}
@@ -347,7 +356,12 @@ truename = QuasiQuoter
         _ -> err $ occString occ ++ " has a strange flavour"
     makeP (name, vars) = if vars == [".."]
             then RecP name . capture VarP <$> recFields name
-            else return $ ConP name (map pat vars) where
+            else
+#if MIN_VERSION_template_haskell(2,18,0)
+              return $ ConP name [] (map pat vars) where
+#else
+              return $ ConP name (map pat vars) where
+#endif
         pat n = case n of
             "_" -> WildP
             '!' : ns -> BangP (pat ns)
